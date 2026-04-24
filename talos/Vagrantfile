@@ -1,0 +1,34 @@
+# -*- mode: ruby -*-
+# vi: set ft=ruby :
+
+TALOS_VERSION = "1.9.5"
+BOX_NAME      = "siderolabs/talos"
+
+NODES = [
+  { name: "cp-1",     ip: "192.168.56.10", cpus: 2, memory: 2048 },
+  { name: "worker-1", ip: "192.168.56.11", cpus: 2, memory: 2048 },
+  { name: "worker-2", ip: "192.168.56.12", cpus: 2, memory: 2048 },
+].freeze
+
+Vagrant.configure("2") do |config|
+  config.vm.box         = BOX_NAME
+  config.vm.box_version = TALOS_VERSION
+
+  NODES.each do |node|
+    config.vm.define node[:name] do |n|
+      n.vm.hostname = node[:name]
+      n.vm.network "private_network", ip: node[:ip]
+
+      n.vm.provider "virtualbox" do |vb|
+        vb.name   = "talos-#{node[:name]}"
+        vb.cpus   = node[:cpus]
+        vb.memory = node[:memory]
+        vb.gui    = false
+
+        # Talos doesn't use a serial console but this quiets VirtualBox noise
+        vb.customize ["modifyvm", :id, "--uart1", "0x3F8", "4"]
+        vb.customize ["modifyvm", :id, "--uartmode1", "file", File::NULL]
+      end
+    end
+  end
+end
