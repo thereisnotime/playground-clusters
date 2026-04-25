@@ -3,13 +3,18 @@ locals {
   all_node_ips     = concat(var.control_plane_ips, var.worker_ips)
 
   # Patch that sets a static IP on the host-only NIC for a given node.
-  # VirtualBox places NIC 2 on PCI slot 8 (PCIDeviceNo=0x8), which with
-  # predictable interface naming gives enp0s8.
+  # Uses deviceSelector.busPath to match by PCI address (0000:00:08.0) rather than
+  # interface name — VirtualBox always places NIC 2 on PCI slot 8 regardless of
+  # what name the OS assigns (eth1, enp0s8, etc.). dhcp: false prevents the DHCP
+  # lease from overriding the static address.
   network_patch = { for ip in local.all_node_ips : ip => yamlencode({
     machine = {
       network = {
         interfaces = [{
-          interface = "enp0s8"
+          deviceSelector = {
+            busPath = "0000:00:08.0"
+          }
+          dhcp      = false
           addresses = ["${ip}/24"]
         }]
       }
