@@ -1,6 +1,9 @@
 # -*- mode: ruby -*-
 # vi: set ft=ruby :
 
+# The "none" communicator is experimental in Vagrant 2.4.x
+ENV["VAGRANT_EXPERIMENTAL"] = "none_communicator"
+
 BOX_NAME      = "theorigamicorporation/talos-virtualbox"
 BOX_VERSION   = "1.0.0"  # Talos v1.12.7
 
