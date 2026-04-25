@@ -2,13 +2,14 @@ locals {
   cluster_endpoint = "https://${var.cluster_endpoint_ip}:6443"
   all_node_ips     = concat(var.control_plane_ips, var.worker_ips)
 
-  # Patch that sets a static IP on eth1 (host-only NIC) for a given node.
-  # eth1 = second NIC in VirtualBox; Talos uses eth* naming for Intel 82540EM adapters.
+  # Patch that sets a static IP on the host-only NIC for a given node.
+  # VirtualBox places NIC 2 on PCI slot 8 (PCIDeviceNo=0x8), which with
+  # predictable interface naming gives enp0s8.
   network_patch = { for ip in local.all_node_ips : ip => yamlencode({
     machine = {
       network = {
         interfaces = [{
-          interface = "eth1"
+          interface = "enp0s8"
           addresses = ["${ip}/24"]
         }]
       }
