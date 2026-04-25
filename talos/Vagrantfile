@@ -1,16 +1,13 @@
 # -*- mode: ruby -*-
 # vi: set ft=ruby :
 
-# The "none" communicator is experimental in Vagrant 2.4.x
-ENV["VAGRANT_EXPERIMENTAL"] = "none_communicator"
-
 BOX_NAME      = "theorigamicorporation/talos-virtualbox"
 BOX_VERSION   = "1.0.0"  # Talos v1.12.7
 
 NODES = [
-  { name: "cp-1",     ip: "192.168.56.10", cpus: 2, memory: 2048 },
-  { name: "worker-1", ip: "192.168.56.11", cpus: 2, memory: 2048 },
-  { name: "worker-2", ip: "192.168.56.12", cpus: 2, memory: 2048 },
+  { name: "cp-1",     ip: "192.168.56.10", talos_port: 50001, cpus: 2, memory: 2048 },
+  { name: "worker-1", ip: "192.168.56.11", talos_port: 50002, cpus: 2, memory: 2048 },
+  { name: "worker-2", ip: "192.168.56.12", talos_port: 50003, cpus: 2, memory: 2048 },
 ].freeze
 
 Vagrant.configure("2") do |config|
@@ -22,7 +19,19 @@ Vagrant.configure("2") do |config|
   NODES.each do |node|
     config.vm.define node[:name] do |n|
       n.vm.hostname = node[:name]
+
+      # Host-only adapter for inter-node traffic; static IP is applied by Talos
+      # machine config after first boot (Vagrant cannot configure it without SSH)
       n.vm.network "private_network", ip: node[:ip]
+
+      # NAT port forward so talosctl can reach the maintenance API before static
+      # IPs are applied
+      n.vm.network "forwarded_port",
+        guest:        50000,
+        host:         node[:talos_port],
+        host_ip:      "127.0.0.1",
+        id:           "talos-api",
+        auto_correct: false
 
       n.vm.provider "virtualbox" do |vb|
         vb.name   = "talos-#{node[:name]}"

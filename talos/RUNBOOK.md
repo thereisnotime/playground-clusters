@@ -31,16 +31,24 @@ terraform init
 # Preview what will be created
 terraform plan
 
-# Bring up VMs and configure the cluster (~5-10 min)
+# Bring up VMs and configure the cluster (~10-15 min)
 terraform apply
 ```
 
 Terraform will:
-1. Run `vagrant up` for all three VMs via the `vagrant_vm` resource
-2. Generate Talos PKI and secrets
-3. Push machine configs to each node
-4. Bootstrap etcd on the control plane
-5. Retrieve kubeconfig
+1. Run `vagrant up` (with `VAGRANT_EXPERIMENTAL=none_communicator`) for all three VMs
+2. Wait for the Talos maintenance API to become reachable on each node via NAT port forwarding
+3. Generate Talos PKI and secrets
+4. Push machine configs (including static IP assignment for the host-only NIC) to each node via the forwarded ports
+5. Bootstrap etcd on the control plane (connects via static IP after first reboot)
+6. Retrieve kubeconfig
+
+> **Note:** If you want to run `vagrant` commands manually outside of Terraform, prefix them with the experimental flag:
+> ```bash
+> VAGRANT_EXPERIMENTAL=none_communicator vagrant up
+> VAGRANT_EXPERIMENTAL=none_communicator vagrant status
+> VAGRANT_EXPERIMENTAL=none_communicator vagrant destroy -f
+> ```
 
 ---
 
@@ -120,7 +128,7 @@ This removes all three VMs and deletes the Talos secrets from state.
 
 ```bash
 # From the talos/ directory
-vagrant destroy -f
+VAGRANT_EXPERIMENTAL=none_communicator vagrant destroy -f
 
 # Remove lingering VirtualBox VMs if vagrant destroy fails
 VBoxManage list vms | grep talos

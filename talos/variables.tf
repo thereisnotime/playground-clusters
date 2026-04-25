@@ -28,6 +28,16 @@ variable "talos_version" {
   default     = "v1.12.7"
 }
 
+variable "node_api_ports" {
+  description = "Map of node IP to localhost port forwarded to Talos API (port 50000) — must match Vagrantfile"
+  type        = map(number)
+  default = {
+    "192.168.56.10" = 50001
+    "192.168.56.11" = 50002
+    "192.168.56.12" = 50003
+  }
+}
+
 variable "kubernetes_version" {
   description = "Kubernetes version to deploy (Talos v1.12.7 ships with K8s v1.33.x)"
   type        = string
