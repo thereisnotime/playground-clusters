@@ -1,8 +1,8 @@
 # -*- mode: ruby -*-
 # vi: set ft=ruby :
 
-TALOS_VERSION = "1.9.5"
-BOX_NAME      = "siderolabs/talos"
+BOX_NAME      = "theorigamicorporation/talos-virtualbox"
+BOX_VERSION   = "1.0.0"  # Talos v1.12.7
 
 NODES = [
   { name: "cp-1",     ip: "192.168.56.10", cpus: 2, memory: 2048 },
@@ -12,7 +12,9 @@ NODES = [
 
 Vagrant.configure("2") do |config|
   config.vm.box         = BOX_NAME
-  config.vm.box_version = TALOS_VERSION
+  config.vm.box_version = BOX_VERSION
+  config.vm.communicator = "none"
+  config.vm.synced_folder ".", "/vagrant", disabled: true
 
   NODES.each do |node|
     config.vm.define node[:name] do |n|

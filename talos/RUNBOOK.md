@@ -7,14 +7,16 @@
 | VirtualBox | 7.x | https://www.virtualbox.org/wiki/Downloads |
 | Vagrant | 2.4+ | https://developer.hashicorp.com/vagrant/install |
 | Terraform | 1.5+ | https://developer.hashicorp.com/terraform/install |
-| talosctl | matches `var.talos_version` | `brew install siderolabs/tap/talosctl` |
+| talosctl | v1.12.7 | `brew install siderolabs/tap/talosctl` |
 | kubectl | matches `var.kubernetes_version` | https://kubernetes.io/docs/tasks/tools/ |
 
-Install the Vagrant Talos box ahead of time (optional, avoids a long first-run download):
+Pre-download the Vagrant box to avoid a slow first-run pull (466 MB):
 
 ```bash
-vagrant box add siderolabs/talos --box-version 1.9.5
+vagrant box add theorigamicorporation/talos-virtualbox --box-version 1.0.0
 ```
+
+> Box is `theorigamicorporation/talos-virtualbox 1.0.0` — Talos v1.12.7, VirtualBox amd64.
 
 ---
 
@@ -89,7 +91,7 @@ talosctl --nodes 192.168.56.10 services
 3. Run `terraform apply` — config is re-pushed; then upgrade each node:
 
 ```bash
-talosctl --nodes 192.168.56.10 upgrade --image ghcr.io/siderolabs/installer:v1.9.5
+talosctl --nodes 192.168.56.10 upgrade --image ghcr.io/siderolabs/installer:v1.12.7
 ```
 
 ### Upgrade Kubernetes
@@ -140,7 +142,7 @@ rm -rf .vagrant/
 ### Remove the Vagrant box
 
 ```bash
-vagrant box remove siderolabs/talos --box-version 1.9.5
+vagrant box remove theorigamicorporation/talos-virtualbox --box-version 1.0.0
 ```
 
 ---

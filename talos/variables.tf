@@ -23,13 +23,13 @@ variable "worker_ips" {
 }
 
 variable "talos_version" {
-  description = "Talos version to target (must match the Vagrant box version)"
+  description = "Talos version to target — must match the Vagrant box (theorigamicorporation/talos-virtualbox 1.0.0 = Talos v1.12.7)"
   type        = string
-  default     = "v1.9.5"
+  default     = "v1.12.7"
 }
 
 variable "kubernetes_version" {
-  description = "Kubernetes version to deploy"
+  description = "Kubernetes version to deploy (Talos v1.12.7 ships with K8s v1.33.x)"
   type        = string
-  default     = "v1.32.3"
+  default     = "v1.33.1"
 }
