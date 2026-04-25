@@ -1,0 +1,41 @@
+# Terraform
+.terraform/
+.terraform.lock.hcl
+terraform.tfstate
+terraform.tfstate.backup
+terraform.tfstate.d/
+*.tfvars
+*.tfvars.json
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+crash.log
+crash.*.log
+
+# Talos / Kubernetes
+talosconfig
+*.talosconfig
+kubeconfig
+*.kubeconfig
+*.kubeconfig.yaml
+secrets.yaml
+machine-config*.yaml
+
+# Vagrant
+.vagrant/
+
+# Packer
+packer_cache/
+*.box
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editors
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
