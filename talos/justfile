@@ -35,6 +35,10 @@ creds:
     @echo "kubeconfig  -> {{ kubeconfig }}"
     @echo "talosconfig -> {{ talosconfig }}"
 
+# Run any kubectl command against the cluster: just kubectl get pods -A
+kubectl *args:
+    kubectl --kubeconfig {{ kubeconfig }} {{ args }}
+
 # Show node status
 nodes:
     kubectl --kubeconfig {{ kubeconfig }} get nodes -o wide

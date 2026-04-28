@@ -11,13 +11,14 @@ output "kubeconfig" {
 }
 
 output "control_plane_ips" {
-  value = var.control_plane_ips
+  value = local.control_plane_ips
 }
 
 output "worker_ips" {
-  value = var.worker_ips
+  value = local.worker_ips
 }
 
 output "cluster_endpoint" {
   value = local.cluster_endpoint
 }
+

@@ -1,44 +1,57 @@
 locals {
-  cluster_endpoint = "https://${var.cluster_endpoint_ip}:6443"
-  all_node_ips     = concat(var.control_plane_ips, var.worker_ips)
+  # --- IP and port layout ---
+  # Control planes: 192.168.56.10, .11, .12, … (up to 10)
+  # Workers:        192.168.56.20, .21, .22, …
+  # Ports:          sequential from 50001 (CPs first, then workers)
 
-  # Map from IP to short hostname so each node gets a unique identity.
+  control_plane_ips   = [for i in range(var.control_plane_count) : "192.168.56.${10 + i}"]
+  worker_ips          = [for i in range(var.worker_count) : "192.168.56.${20 + i}"]
+  all_node_ips        = concat(local.control_plane_ips, local.worker_ips)
+  cluster_endpoint_ip = local.control_plane_ips[0]
+
+  # Cluster endpoint points to the first CP. For a playground this is fine —
+  # etcd replicates across all CPs regardless. For production HA you'd put a
+  # load balancer or kube-vip VIP here instead.
+  cluster_endpoint = "https://${local.cluster_endpoint_ip}:6443"
+
+  node_api_ports = { for i, ip in local.all_node_ips : ip => 50001 + i }
+
+  # --- Node identity ---
   node_hostnames = merge(
-    { for idx, ip in var.control_plane_ips : ip => "cp-${idx + 1}" },
-    { for idx, ip in var.worker_ips : ip => "worker-${idx + 1}" }
+    { for i, ip in local.control_plane_ips : ip => "cp-${i + 1}" },
+    { for i, ip in local.worker_ips : ip => "worker-${i + 1}" }
   )
 
-  # Patch that sets a static IP on the host-only NIC for a given node.
-  # Uses deviceSelector.busPath to match by PCI address (0000:00:08.0) rather than
-  # interface name — VirtualBox always places NIC 2 on PCI slot 8 regardless of
-  # what name the OS assigns (eth1, enp0s8, etc.). dhcp: false prevents the DHCP
-  # lease from overriding the static address.
+  # Vagrantfile node list (consumed by machines.tf templatefile)
+  nodes_config = [for ip in local.all_node_ips : {
+    name       = local.node_hostnames[ip]
+    ip         = ip
+    talos_port = local.node_api_ports[ip]
+    cpus       = var.node_cpus
+    memory     = var.node_memory
+  }]
+
+  # --- Machine config patches ---
+
+  # Static IP on host-only NIC (PCI slot 8, busPath 0000:00:08.0).
   network_patch = { for ip in local.all_node_ips : ip => yamlencode({
     machine = {
       network = {
         interfaces = [{
-          deviceSelector = {
-            busPath = "0000:00:08.0"
-          }
-          dhcp      = false
-          addresses = ["${ip}/24"]
+          deviceSelector = { busPath = "0000:00:08.0" }
+          dhcp           = false
+          addresses      = ["${ip}/24"]
         }]
       }
     }
   }) }
 
-  # Per-node kubelet hostname-override patch.
-  # Talos auto-generates OS hostnames from hardware IDs; since all VMs are cloned
-  # from the same box they get the same generated name. Setting hostname-override in
-  # the kubelet makes each node register under a unique name in Kubernetes without
-  # touching the OS hostname (which would conflict with the provider's HostnameConfig
-  # document and produce a "static hostname already set" error).
+  # Unique kubelet node name — avoids hostname collisions when all VMs clone
+  # from the same box and get the same hardware-derived OS hostname.
   kubelet_patch = { for ip in local.all_node_ips : ip => yamlencode({
     machine = {
       kubelet = {
-        extraArgs = {
-          "hostname-override" = local.node_hostnames[ip]
-        }
+        extraArgs = { "hostname-override" = local.node_hostnames[ip] }
       }
     }
   }) }
@@ -49,10 +62,10 @@ locals {
 
 resource "talos_machine_secrets" "this" {}
 
-# --- Machine configs (network patch baked in per node) ---
+# --- Machine configs ---
 
 data "talos_machine_configuration" "controlplane" {
-  for_each = toset(var.control_plane_ips)
+  for_each = toset(local.control_plane_ips)
 
   cluster_name       = var.cluster_name
   machine_type       = "controlplane"
@@ -64,7 +77,7 @@ data "talos_machine_configuration" "controlplane" {
 }
 
 data "talos_machine_configuration" "worker" {
-  for_each = toset(var.worker_ips)
+  for_each = toset(local.worker_ips)
 
   cluster_name       = var.cluster_name
   machine_type       = "worker"
@@ -78,35 +91,31 @@ data "talos_machine_configuration" "worker" {
 data "talos_client_configuration" "this" {
   cluster_name         = var.cluster_name
   client_configuration = talos_machine_secrets.this.client_configuration
-  endpoints            = var.control_plane_ips
+  endpoints            = local.control_plane_ips
   nodes                = local.all_node_ips
 }
 
 # --- Write machine configs to local files ---
 # talos_machine_configuration_apply uses the Go TLS stack which fails to verify
-# Talos's Ed25519 CA cert (x509 Ed25519 verification failure in Go). We use
-# talosctl apply-config --insecure instead, which is the correct approach for
-# maintenance mode and skips TLS verification entirely.
+# Talos's Ed25519 CA cert. We use talosctl apply-config --insecure instead.
 
 resource "local_file" "controlplane_config" {
-  for_each = toset(var.control_plane_ips)
+  for_each = toset(local.control_plane_ips)
   content  = data.talos_machine_configuration.controlplane[each.value].machine_configuration
   filename = "${path.module}/.talos-configs/controlplane-${replace(each.value, ".", "-")}.yaml"
 }
 
 resource "local_file" "worker_config" {
-  for_each = toset(var.worker_ips)
+  for_each = toset(local.worker_ips)
   content  = data.talos_machine_configuration.worker[each.value].machine_configuration
   filename = "${path.module}/.talos-configs/worker-${replace(each.value, ".", "-")}.yaml"
 }
 
 # --- Apply configs via talosctl --insecure (maintenance mode) ---
-# Pass the NAT-forwarded port directly via --nodes 127.0.0.1:<port> — this is
-# the only form talosctl respects for port overrides in insecure mode.
-# talosctl exits 0 even on failure, so we grep output for error indicators.
+# --nodes 127.0.0.1:<port> is the only form talosctl respects for port overrides.
 
 resource "null_resource" "apply_controlplane" {
-  for_each = toset(var.control_plane_ips)
+  for_each = toset(local.control_plane_ips)
   depends_on = [
     null_resource.talos_api_ready,
     local_file.controlplane_config,
@@ -118,10 +127,10 @@ resource "null_resource" "apply_controlplane" {
 
   provisioner "local-exec" {
     command = <<-EOT
-      echo "Applying controlplane config to ${each.value} via 127.0.0.1:${var.node_api_ports[each.value]}..."
+      echo "Applying controlplane config to ${each.value} via 127.0.0.1:${local.node_api_ports[each.value]}..."
       out=$(talosctl apply-config \
         --insecure \
-        --nodes 127.0.0.1:${var.node_api_ports[each.value]} \
+        --nodes 127.0.0.1:${local.node_api_ports[each.value]} \
         --file "${path.module}/.talos-configs/controlplane-${replace(each.value, ".", "-")}.yaml" \
         2>&1)
       echo "$out"
@@ -135,7 +144,7 @@ resource "null_resource" "apply_controlplane" {
 }
 
 resource "null_resource" "apply_worker" {
-  for_each = toset(var.worker_ips)
+  for_each = toset(local.worker_ips)
   depends_on = [
     null_resource.apply_controlplane,
     local_file.worker_config,
@@ -147,10 +156,10 @@ resource "null_resource" "apply_worker" {
 
   provisioner "local-exec" {
     command = <<-EOT
-      echo "Applying worker config to ${each.value} via 127.0.0.1:${var.node_api_ports[each.value]}..."
+      echo "Applying worker config to ${each.value} via 127.0.0.1:${local.node_api_ports[each.value]}..."
       out=$(talosctl apply-config \
         --insecure \
-        --nodes 127.0.0.1:${var.node_api_ports[each.value]} \
+        --nodes 127.0.0.1:${local.node_api_ports[each.value]} \
         --file "${path.module}/.talos-configs/worker-${replace(each.value, ".", "-")}.yaml" \
         2>&1)
       echo "$out"
@@ -163,9 +172,9 @@ resource "null_resource" "apply_worker" {
   }
 }
 
-# --- Wait for static IP after config apply + reboot ---
-# Nodes reboot after receiving their config. Wait for the control plane static IP
-# to be reachable on the Talos API port before bootstrapping etcd.
+# --- Wait for VIP after config apply + reboot ---
+# Nodes reboot after receiving config. Wait for the VIP on port 50000 of the
+# first CP (kube-vip claims the VIP once Talos is configured).
 
 resource "null_resource" "wait_for_static_ip" {
   depends_on = [null_resource.apply_controlplane]
@@ -176,11 +185,11 @@ resource "null_resource" "wait_for_static_ip" {
 
   provisioner "local-exec" {
     command = <<-EOT
-      echo "Waiting for control plane static IP ${var.cluster_endpoint_ip}:50000..."
+      echo "Waiting for control plane static IP ${local.cluster_endpoint_ip}:50000..."
       timeout 300 bash -c \
-        'until nc -zw3 ${var.cluster_endpoint_ip} 50000 2>/dev/null; do sleep 5; done' \
-        || { echo "ERROR: ${var.cluster_endpoint_ip}:50000 not reachable after 5 min"; exit 1; }
-      echo "${var.cluster_endpoint_ip}:50000 reachable"
+        'until nc -zw3 ${local.cluster_endpoint_ip} 50000 2>/dev/null; do sleep 5; done' \
+        || { echo "ERROR: ${local.cluster_endpoint_ip}:50000 not reachable after 5 min"; exit 1; }
+      echo "${local.cluster_endpoint_ip}:50000 reachable"
     EOT
   }
 }
@@ -191,8 +200,8 @@ resource "talos_machine_bootstrap" "this" {
   depends_on = [null_resource.wait_for_static_ip]
 
   client_configuration = talos_machine_secrets.this.client_configuration
-  node                 = var.cluster_endpoint_ip
-  endpoint             = var.cluster_endpoint_ip
+  node                 = local.cluster_endpoint_ip
+  endpoint             = local.cluster_endpoint_ip
 }
 
 # --- Retrieve kubeconfig ---
@@ -201,5 +210,5 @@ resource "talos_cluster_kubeconfig" "this" {
   depends_on = [talos_machine_bootstrap.this]
 
   client_configuration = talos_machine_secrets.this.client_configuration
-  node                 = var.cluster_endpoint_ip
+  node                 = local.cluster_endpoint_ip
 }
