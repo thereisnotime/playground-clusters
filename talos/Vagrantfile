@@ -1,8 +1,12 @@
 # -*- mode: ruby -*-
 # vi: set ft=ruby :
 
+# The "none" communicator is experimental in Vagrant 2.4.x and must be
+# opted into explicitly — without this it silently fails to register.
+ENV['VAGRANT_EXPERIMENTAL'] ||= 'none_communicator'
+
 BOX_NAME      = "theorigamicorporation/talos-virtualbox"
-BOX_VERSION   = "1.0.0"  # Talos v1.12.7
+BOX_VERSION   = "2.0.0"  # Talos v1.12.7 — maintenance mode, no pre-applied config
 
 NODES = [
   { name: "cp-1",     ip: "192.168.56.10", talos_port: 50001, cpus: 2, memory: 2048 },

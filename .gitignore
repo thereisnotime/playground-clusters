@@ -15,6 +15,7 @@ crash.log
 crash.*.log
 
 # Talos / Kubernetes
+.talos-configs/
 talosconfig
 *.talosconfig
 kubeconfig
