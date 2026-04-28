@@ -1,0 +1,80 @@
+kubeconfig := ".talos-configs/kubeconfig"
+talosconfig := ".talos-configs/talosconfig"
+cp_ip       := "192.168.56.10"
+
+# List available recipes
+default:
+    @just --list
+
+# Bring up the cluster (VMs + config apply + bootstrap)
+up:
+    terraform apply -auto-approve
+
+# Tear down the cluster (VMs destroyed, state cleaned)
+down:
+    terraform destroy -auto-approve
+
+# Destroy and bring back up from scratch
+rebuild:
+    just down
+    just up
+
+# Initialize terraform (first time only)
+init:
+    terraform init
+
+# Preview what terraform would do
+plan:
+    terraform plan
+
+# Write kubeconfig and talosconfig to .talos-configs/
+creds:
+    @mkdir -p .talos-configs
+    terraform output -raw kubeconfig   > {{ kubeconfig }}
+    terraform output -raw talosconfig  > {{ talosconfig }}
+    @echo "kubeconfig  -> {{ kubeconfig }}"
+    @echo "talosconfig -> {{ talosconfig }}"
+
+# Show node status
+nodes:
+    kubectl --kubeconfig {{ kubeconfig }} get nodes -o wide
+
+# Show all pods across namespaces
+pods:
+    kubectl --kubeconfig {{ kubeconfig }} get pods -A
+
+# Tail logs for a pod: just logs <namespace> <pod>
+logs namespace pod:
+    kubectl --kubeconfig {{ kubeconfig }} logs -n {{ namespace }} {{ pod }} --follow
+
+# Check cluster health via talosctl
+health:
+    talosctl --talosconfig {{ talosconfig }} \
+        --endpoints {{ cp_ip }} --nodes {{ cp_ip }} \
+        health
+
+# Open a talosctl shell for the control plane
+console:
+    talosctl --talosconfig {{ talosconfig }} \
+        --endpoints {{ cp_ip }} --nodes {{ cp_ip }} \
+        dashboard
+
+# Show talosctl services on all nodes
+services:
+    talosctl --talosconfig {{ talosconfig }} \
+        --endpoints {{ cp_ip }} \
+        --nodes {{ cp_ip }},192.168.56.11,192.168.56.12 \
+        services
+
+# Show kernel logs on all nodes
+dmesg:
+    talosctl --talosconfig {{ talosconfig }} \
+        --endpoints {{ cp_ip }} \
+        --nodes {{ cp_ip }},192.168.56.11,192.168.56.12 \
+        dmesg
+
+# Reset a specific node's EPHEMERAL partition (wipes kubelet certs + etcd): just reset-node 192.168.56.10
+reset-node ip:
+    talosctl --talosconfig {{ talosconfig }} \
+        --endpoints {{ cp_ip }} --nodes {{ ip }} \
+        reset --graceful=false --reboot --system-labels-to-wipe EPHEMERAL
