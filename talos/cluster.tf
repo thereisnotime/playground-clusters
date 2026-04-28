@@ -1,6 +1,5 @@
 locals {
-  # --- IP and port layout ---
-  # Control planes: 192.168.56.10, .11, .12, … (up to 10)
+  # Control planes: 192.168.56.10, .11, .12, …
   # Workers:        192.168.56.20, .21, .22, …
   # Ports:          sequential from 50001 (CPs first, then workers)
 
@@ -8,21 +7,15 @@ locals {
   worker_ips          = [for i in range(var.worker_count) : "192.168.56.${20 + i}"]
   all_node_ips        = concat(local.control_plane_ips, local.worker_ips)
   cluster_endpoint_ip = local.control_plane_ips[0]
-
-  # Cluster endpoint points to the first CP. For a playground this is fine —
-  # etcd replicates across all CPs regardless. For production HA you'd put a
-  # load balancer or kube-vip VIP here instead.
-  cluster_endpoint = "https://${local.cluster_endpoint_ip}:6443"
+  cluster_endpoint    = "https://${local.cluster_endpoint_ip}:6443"
 
   node_api_ports = { for i, ip in local.all_node_ips : ip => 50001 + i }
 
-  # --- Node identity ---
   node_hostnames = merge(
     { for i, ip in local.control_plane_ips : ip => "cp-${i + 1}" },
     { for i, ip in local.worker_ips : ip => "worker-${i + 1}" }
   )
 
-  # Vagrantfile node list (consumed by machines.tf templatefile)
   nodes_config = [for ip in local.all_node_ips : {
     name       = local.node_hostnames[ip]
     ip         = ip
@@ -31,9 +24,6 @@ locals {
     memory     = var.node_memory
   }]
 
-  # --- Machine config patches ---
-
-  # Static IP on host-only NIC (PCI slot 8, busPath 0000:00:08.0).
   network_patch = { for ip in local.all_node_ips : ip => yamlencode({
     machine = {
       network = {
@@ -46,8 +36,6 @@ locals {
     }
   }) }
 
-  # Unique kubelet node name — avoids hostname collisions when all VMs clone
-  # from the same box and get the same hardware-derived OS hostname.
   kubelet_patch = { for ip in local.all_node_ips : ip => yamlencode({
     machine = {
       kubelet = {
@@ -55,10 +43,9 @@ locals {
       }
     }
   }) }
-
 }
 
-# --- Secrets (PKI, tokens, etc.) ---
+# --- Secrets (PKI, tokens — Talos-generated, correct format) ---
 
 resource "talos_machine_secrets" "this" {}
 
@@ -95,92 +82,61 @@ data "talos_client_configuration" "this" {
   nodes                = local.all_node_ips
 }
 
-# --- Write machine configs to local files ---
-# talos_machine_configuration_apply uses the Go TLS stack which fails to verify
-# Talos's Ed25519 CA cert. We use talosctl apply-config --insecure instead.
+# --- Wait for maintenance API on each node ---
 
-resource "local_file" "controlplane_config" {
-  for_each = toset(local.control_plane_ips)
-  content  = data.talos_machine_configuration.controlplane[each.value].machine_configuration
-  filename = "${path.module}/.talos-configs/controlplane-${replace(each.value, ".", "-")}.yaml"
-}
-
-resource "local_file" "worker_config" {
-  for_each = toset(local.worker_ips)
-  content  = data.talos_machine_configuration.worker[each.value].machine_configuration
-  filename = "${path.module}/.talos-configs/worker-${replace(each.value, ".", "-")}.yaml"
-}
-
-# --- Apply configs via talosctl --insecure (maintenance mode) ---
-# --nodes 127.0.0.1:<port> is the only form talosctl respects for port overrides.
-
-resource "null_resource" "apply_controlplane" {
-  for_each = toset(local.control_plane_ips)
-  depends_on = [
-    null_resource.talos_api_ready,
-    local_file.controlplane_config,
-  ]
+resource "null_resource" "talos_api_ready" {
+  depends_on = [vagrant_vm.cluster]
 
   triggers = {
-    config = sha256(data.talos_machine_configuration.controlplane[each.value].machine_configuration)
+    cluster_id = vagrant_vm.cluster.id
   }
 
   provisioner "local-exec" {
     command = <<-EOT
-      echo "Applying controlplane config to ${each.value} via 127.0.0.1:${local.node_api_ports[each.value]}..."
-      out=$(talosctl apply-config \
-        --insecure \
-        --nodes 127.0.0.1:${local.node_api_ports[each.value]} \
-        --file "${path.module}/.talos-configs/controlplane-${replace(each.value, ".", "-")}.yaml" \
-        2>&1)
-      echo "$out"
-      if echo "$out" | grep -qi "^error\|refused\|unavailable\|failed to\|rpc error"; then
-        echo "ERROR: talosctl apply-config failed for ${each.value}" >&2
-        exit 1
-      fi
-      echo "Controlplane config applied to ${each.value}"
+      for port in ${join(" ", values(local.node_api_ports))}; do
+        echo "Waiting for Talos API on 127.0.0.1:$port..."
+        timeout 300 bash -c \
+          'until nc -zw2 127.0.0.1 '"$port"' 2>/dev/null; do sleep 5; done' \
+          || { echo "ERROR: Talos API on port $port not ready after 5 min"; exit 1; }
+        echo "127.0.0.1:$port ready"
+      done
     EOT
   }
 }
 
-resource "null_resource" "apply_worker" {
+# --- Apply machine configs via Talos provider (no local config files, no talosctl CLI) ---
+# talos_machine_configuration_apply handles maintenance-mode TLS internally.
+# endpoint supports host:port — needed for NAT port-forwarded VMs.
+
+resource "talos_machine_configuration_apply" "controlplane" {
+  for_each   = toset(local.control_plane_ips)
+  depends_on = [null_resource.talos_api_ready]
+
+  client_configuration        = talos_machine_secrets.this.client_configuration
+  machine_configuration_input = data.talos_machine_configuration.controlplane[each.value].machine_configuration
+  endpoint                    = "127.0.0.1:${local.node_api_ports[each.value]}"
+  node                        = "127.0.0.1"
+}
+
+resource "talos_machine_configuration_apply" "worker" {
   for_each = toset(local.worker_ips)
   depends_on = [
-    null_resource.apply_controlplane,
-    local_file.worker_config,
+    talos_machine_configuration_apply.controlplane,
   ]
 
-  triggers = {
-    config = sha256(data.talos_machine_configuration.worker[each.value].machine_configuration)
-  }
-
-  provisioner "local-exec" {
-    command = <<-EOT
-      echo "Applying worker config to ${each.value} via 127.0.0.1:${local.node_api_ports[each.value]}..."
-      out=$(talosctl apply-config \
-        --insecure \
-        --nodes 127.0.0.1:${local.node_api_ports[each.value]} \
-        --file "${path.module}/.talos-configs/worker-${replace(each.value, ".", "-")}.yaml" \
-        2>&1)
-      echo "$out"
-      if echo "$out" | grep -qi "^error\|refused\|unavailable\|failed to\|rpc error"; then
-        echo "ERROR: talosctl apply-config failed for ${each.value}" >&2
-        exit 1
-      fi
-      echo "Worker config applied to ${each.value}"
-    EOT
-  }
+  client_configuration        = talos_machine_secrets.this.client_configuration
+  machine_configuration_input = data.talos_machine_configuration.worker[each.value].machine_configuration
+  endpoint                    = "127.0.0.1:${local.node_api_ports[each.value]}"
+  node                        = "127.0.0.1"
 }
 
-# --- Wait for VIP after config apply + reboot ---
-# Nodes reboot after receiving config. Wait for the VIP on port 50000 of the
-# first CP (kube-vip claims the VIP once Talos is configured).
+# --- Wait for CP static IP after reboot ---
 
 resource "null_resource" "wait_for_static_ip" {
-  depends_on = [null_resource.apply_controlplane]
+  depends_on = [talos_machine_configuration_apply.controlplane]
 
   triggers = {
-    cp_apply = join(",", [for k, v in null_resource.apply_controlplane : v.id])
+    cp_apply = join(",", [for k, v in talos_machine_configuration_apply.controlplane : v.id])
   }
 
   provisioner "local-exec" {
@@ -194,7 +150,7 @@ resource "null_resource" "wait_for_static_ip" {
   }
 }
 
-# --- Bootstrap etcd on the first control plane ---
+# --- Bootstrap etcd ---
 
 resource "talos_machine_bootstrap" "this" {
   depends_on = [null_resource.wait_for_static_ip]
