@@ -1,0 +1,4 @@
+terraform 1.14.8
+kubectl 1.35.3
+vagrant 2.4.9
+just 1.48.1
