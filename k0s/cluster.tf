@@ -26,7 +26,8 @@ locals {
     spec = {
       hosts = concat(
         [for ip in local.control_plane_ips : {
-          role = "controller"
+          role           = "controller"
+          privateAddress = ip
           ssh = {
             address = ip
             user    = "vagrant"
@@ -35,7 +36,8 @@ locals {
           }
         }],
         [for ip in local.worker_ips : {
-          role = "worker"
+          role           = "worker"
+          privateAddress = ip
           ssh = {
             address = ip
             user    = "vagrant"
@@ -44,7 +46,20 @@ locals {
           }
         }]
       )
-      k0s = { version = var.k0s_version }
+      k0s = {
+        version = var.k0s_version
+        config = {
+          apiVersion = "k0s.k0sproject.io/v1beta1"
+          kind       = "ClusterConfig"
+          metadata   = { name = var.cluster_name }
+          spec = {
+            api = {
+              address = local.control_plane_ips[0]
+              sans    = [local.control_plane_ips[0]]
+            }
+          }
+        }
+      }
     }
   }
 }
