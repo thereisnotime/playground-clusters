@@ -27,6 +27,7 @@ machine-config*.yaml
 # Vagrant
 .vagrant/
 talos/.nodes.json
+talos/.vagrant-nodes/
 
 # Packer
 packer_cache/

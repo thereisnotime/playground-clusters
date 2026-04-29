@@ -92,10 +92,10 @@ data "talos_client_configuration" "this" {
 # --- Wait for maintenance API on each node ---
 
 resource "null_resource" "talos_api_ready" {
-  depends_on = [vagrant_vm.cluster]
+  depends_on = [null_resource.vm]
 
   triggers = {
-    cluster_id = vagrant_vm.cluster.id
+    node_ids = join(",", [for k, v in null_resource.vm : v.id])
   }
 
   provisioner "local-exec" {
