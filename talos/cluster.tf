@@ -102,9 +102,9 @@ resource "null_resource" "talos_api_ready" {
     command = <<-EOT
       for port in ${join(" ", values(local.node_api_ports))}; do
         echo "Waiting for Talos API on 127.0.0.1:$port..."
-        timeout 300 bash -c \
+        timeout ${var.node_boot_timeout} bash -c \
           'until nc -zw2 127.0.0.1 '"$port"' 2>/dev/null; do sleep 5; done' \
-          || { echo "ERROR: Talos API on port $port not ready after 5 min"; exit 1; }
+          || { echo "ERROR: Talos API on port $port not ready after ${var.node_boot_timeout}s"; exit 1; }
         echo "127.0.0.1:$port ready"
       done
     EOT
@@ -149,9 +149,9 @@ resource "null_resource" "wait_for_static_ip" {
   provisioner "local-exec" {
     command = <<-EOT
       echo "Waiting for control plane static IP ${local.cluster_endpoint_ip}:50000..."
-      timeout 300 bash -c \
+      timeout ${var.node_boot_timeout} bash -c \
         'until nc -zw3 ${local.cluster_endpoint_ip} 50000 2>/dev/null; do sleep 5; done' \
-        || { echo "ERROR: ${local.cluster_endpoint_ip}:50000 not reachable after 5 min"; exit 1; }
+        || { echo "ERROR: ${local.cluster_endpoint_ip}:50000 not reachable after ${var.node_boot_timeout}s"; exit 1; }
       echo "${local.cluster_endpoint_ip}:50000 reachable"
     EOT
   }

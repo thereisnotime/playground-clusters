@@ -11,8 +11,8 @@ resource "local_file" "node_vagrantfile" {
     talos_port  = each.value.talos_port
     cpus        = each.value.cpus
     memory      = each.value.memory
-    box_name    = "theorigamicorporation/talos-virtualbox"
-    box_version = "2.0.0"
+    box_name    = var.box_name
+    box_version = var.box_version
   })
   filename = "${path.module}/.vagrant-nodes/${each.key}/Vagrantfile"
 }
@@ -32,8 +32,9 @@ resource "null_resource" "vm" {
 
   provisioner "local-exec" {
     when        = destroy
-    command     = "vagrant destroy -f"
+    command     = "vagrant destroy -f; rm -rf '${path.module}/.vagrant-nodes/${each.key}'"
     working_dir = "${path.module}/.vagrant-nodes/${each.key}"
     environment = { VAGRANT_EXPERIMENTAL = "none_communicator" }
+    on_failure  = continue
   }
 }

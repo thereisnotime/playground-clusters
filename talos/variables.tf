@@ -39,3 +39,27 @@ variable "kubernetes_version" {
   type        = string
   default     = "v1.33.1"
 }
+
+variable "box_name" {
+  description = "Vagrant box name for cluster nodes"
+  type        = string
+  default     = "theorigamicorporation/talos-virtualbox"
+}
+
+variable "box_version" {
+  description = "Vagrant box version — must match var.talos_version"
+  type        = string
+  default     = "2.0.0"
+}
+
+variable "ca_validity_hours" {
+  description = "Validity period in hours for all generated CA certificates"
+  type        = number
+  default     = 87600 # 10 years
+}
+
+variable "node_boot_timeout" {
+  description = "Seconds to wait for each node's Talos API before failing"
+  type        = number
+  default     = 300
+}

@@ -47,7 +47,7 @@ resource "tls_self_signed_cert" "os" {
 
   private_key_pem       = tls_private_key.os.private_key_pem
   subject { organization = "talos" }
-  validity_period_hours = 87600
+  validity_period_hours = var.ca_validity_hours
   is_ca_certificate     = true
   allowed_uses          = ["digital_signature", "cert_signing", "server_auth", "client_auth"]
 }
@@ -61,7 +61,7 @@ resource "tls_self_signed_cert" "etcd" {
 
   private_key_pem       = tls_private_key.etcd.private_key_pem
   subject { organization = "etcd" }
-  validity_period_hours = 87600
+  validity_period_hours = var.ca_validity_hours
   is_ca_certificate     = true
   allowed_uses          = ["digital_signature", "cert_signing", "server_auth", "client_auth"]
 }
@@ -75,7 +75,7 @@ resource "tls_self_signed_cert" "k8s" {
 
   private_key_pem       = tls_private_key.k8s.private_key_pem
   subject { organization = "kubernetes" }
-  validity_period_hours = 87600
+  validity_period_hours = var.ca_validity_hours
   is_ca_certificate     = true
   allowed_uses          = ["digital_signature", "cert_signing", "server_auth", "client_auth"]
 }
@@ -89,7 +89,7 @@ resource "tls_self_signed_cert" "k8s_aggregator" {
 
   private_key_pem       = tls_private_key.k8s_aggregator.private_key_pem
   subject { organization = "front-proxy" }
-  validity_period_hours = 87600
+  validity_period_hours = var.ca_validity_hours
   is_ca_certificate     = true
   allowed_uses          = ["digital_signature", "cert_signing", "server_auth", "client_auth"]
 }
@@ -115,7 +115,7 @@ resource "tls_locally_signed_cert" "client" {
   ca_cert_pem           = tls_self_signed_cert.os.cert_pem
   ca_private_key_pem    = tls_private_key.os.private_key_pem
   cert_request_pem      = tls_cert_request.client.cert_request_pem
-  validity_period_hours = 87600
+  validity_period_hours = var.ca_validity_hours
   allowed_uses          = ["digital_signature", "client_auth"]
 }
 
