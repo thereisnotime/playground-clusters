@@ -18,6 +18,14 @@ terraform {
       source  = "hashicorp/null"
       version = "~> 3.0"
     }
+    tls = {
+      source  = "hashicorp/tls"
+      version = "~> 3.0"
+    }
+    random = {
+      source  = "hashicorp/random"
+      version = "~> 3.0"
+    }
   }
 }
 
@@ -25,3 +33,5 @@ provider "vagrant" {}
 provider "talos" {}
 provider "local" {}
 provider "null" {}
+provider "tls" {}
+provider "random" {}

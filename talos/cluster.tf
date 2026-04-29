@@ -45,11 +45,7 @@ locals {
   }) }
 }
 
-# --- Secrets (PKI, tokens — Talos-generated, correct format) ---
-
-resource "talos_machine_secrets" "this" {}
-
-# --- Machine configs ---
+# --- Machine configs (PKI comes from pki.tf locals) ---
 
 data "talos_machine_configuration" "controlplane" {
   for_each = toset(local.control_plane_ips)
@@ -57,7 +53,7 @@ data "talos_machine_configuration" "controlplane" {
   cluster_name       = var.cluster_name
   machine_type       = "controlplane"
   cluster_endpoint   = local.cluster_endpoint
-  machine_secrets    = talos_machine_secrets.this.machine_secrets
+  machine_secrets    = local.machine_secrets
   talos_version      = var.talos_version
   kubernetes_version = var.kubernetes_version
   config_patches     = [local.network_patch[each.value], local.kubelet_patch[each.value]]
@@ -69,7 +65,7 @@ data "talos_machine_configuration" "worker" {
   cluster_name       = var.cluster_name
   machine_type       = "worker"
   cluster_endpoint   = local.cluster_endpoint
-  machine_secrets    = talos_machine_secrets.this.machine_secrets
+  machine_secrets    = local.machine_secrets
   talos_version      = var.talos_version
   kubernetes_version = var.kubernetes_version
   config_patches     = [local.network_patch[each.value], local.kubelet_patch[each.value]]
@@ -77,7 +73,7 @@ data "talos_machine_configuration" "worker" {
 
 data "talos_client_configuration" "this" {
   cluster_name         = var.cluster_name
-  client_configuration = talos_machine_secrets.this.client_configuration
+  client_configuration = local.client_configuration
   endpoints            = local.control_plane_ips
   nodes                = local.all_node_ips
 }
@@ -112,7 +108,7 @@ resource "talos_machine_configuration_apply" "controlplane" {
   for_each   = toset(local.control_plane_ips)
   depends_on = [null_resource.talos_api_ready]
 
-  client_configuration        = talos_machine_secrets.this.client_configuration
+  client_configuration        = local.client_configuration
   machine_configuration_input = data.talos_machine_configuration.controlplane[each.value].machine_configuration
   endpoint                    = "127.0.0.1:${local.node_api_ports[each.value]}"
   node                        = "127.0.0.1"
@@ -124,7 +120,7 @@ resource "talos_machine_configuration_apply" "worker" {
     talos_machine_configuration_apply.controlplane,
   ]
 
-  client_configuration        = talos_machine_secrets.this.client_configuration
+  client_configuration        = local.client_configuration
   machine_configuration_input = data.talos_machine_configuration.worker[each.value].machine_configuration
   endpoint                    = "127.0.0.1:${local.node_api_ports[each.value]}"
   node                        = "127.0.0.1"
@@ -155,7 +151,7 @@ resource "null_resource" "wait_for_static_ip" {
 resource "talos_machine_bootstrap" "this" {
   depends_on = [null_resource.wait_for_static_ip]
 
-  client_configuration = talos_machine_secrets.this.client_configuration
+  client_configuration = local.client_configuration
   node                 = local.cluster_endpoint_ip
   endpoint             = local.cluster_endpoint_ip
 }
@@ -165,6 +161,6 @@ resource "talos_machine_bootstrap" "this" {
 resource "talos_cluster_kubeconfig" "this" {
   depends_on = [talos_machine_bootstrap.this]
 
-  client_configuration = talos_machine_secrets.this.client_configuration
+  client_configuration = local.client_configuration
   node                 = local.cluster_endpoint_ip
 }
