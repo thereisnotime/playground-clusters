@@ -64,14 +64,15 @@ terraform apply \
 | Tool | Install |
 |------|---------|
 | VirtualBox 7.x | https://www.virtualbox.org/wiki/Downloads |
-| Vagrant 2.4+ | https://developer.hashicorp.com/vagrant/install |
-| Terraform 1.5+ | https://developer.hashicorp.com/terraform/install |
-| just | https://github.com/casey/just |
-| kubectl | https://kubernetes.io/docs/tasks/tools/ |
-| talosctl *(Talos only)* | `brew install siderolabs/tap/talosctl` |
-| k0sctl *(k0s only)* | https://github.com/k0sproject/k0sctl/releases |
+| asdf | https://asdf-vm.com/guide/getting-started.html |
+| Vagrant 2.4+ | `asdf plugin add vagrant && asdf install vagrant latest` |
+| Terraform 1.5+ | `asdf plugin add terraform && asdf install terraform latest` |
+| just | `asdf plugin add just && asdf install just latest` |
+| kubectl | `asdf plugin add kubectl && asdf install kubectl latest` |
+| talosctl *(Talos only)* | `asdf plugin add talosctl && asdf install talosctl latest` |
+| k0sctl *(k0s only)* | `asdf plugin add k0sctl && asdf install k0sctl latest` |
 
-Tool versions are pinned per cluster in `.tool-versions` (asdf).
+Tool versions are pinned per cluster in `.tool-versions` (asdf). Run `asdf install` inside a cluster directory to get the exact pinned versions.
 
 ## Box builds
 
