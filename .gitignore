@@ -28,6 +28,11 @@ machine-config*.yaml
 .vagrant/
 talos/.nodes.json
 talos/.vagrant-nodes/
+k0s/.vagrant-nodes/
+
+# k0s
+k0s/.k0s-configs/
+k0s/k0sctl.yaml
 
 # Packer
 packer_cache/

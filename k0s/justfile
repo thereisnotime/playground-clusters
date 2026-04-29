@@ -1,0 +1,65 @@
+kubeconfig := ".k0s-configs/kubeconfig"
+k0sctl_cfg := "k0sctl.yaml"
+cp_ip      := "192.168.56.10"
+
+# List available recipes
+default:
+    @just --list
+
+# Bring up the cluster (VMs + k0sctl apply)
+up:
+    terraform apply -auto-approve
+
+# Tear down the cluster (VMs destroyed, state cleaned)
+down:
+    terraform destroy -auto-approve
+
+# Destroy and bring back up from scratch
+rebuild:
+    just down
+    just up
+
+# Initialize terraform (first time only)
+init:
+    terraform init
+
+# Preview what terraform would do
+plan:
+    terraform plan
+
+# Fetch kubeconfig via k0sctl into .k0s-configs/
+creds:
+    @mkdir -p .k0s-configs
+    k0sctl kubeconfig --config {{ k0sctl_cfg }} > {{ kubeconfig }}
+    @echo "kubeconfig -> {{ kubeconfig }}"
+
+# Run any kubectl command against the cluster: just kubectl get pods -A
+kubectl *args:
+    kubectl --kubeconfig {{ kubeconfig }} {{ args }}
+
+# Show node status
+nodes:
+    kubectl --kubeconfig {{ kubeconfig }} get nodes -o wide
+
+# Show all pods across namespaces
+pods:
+    kubectl --kubeconfig {{ kubeconfig }} get pods -A
+
+# Tail logs for a pod: just logs <namespace> <pod>
+logs namespace pod:
+    kubectl --kubeconfig {{ kubeconfig }} logs -n {{ namespace }} {{ pod }} --follow
+
+# Show node and pod health
+health:
+    kubectl --kubeconfig {{ kubeconfig }} get nodes -o wide
+    kubectl --kubeconfig {{ kubeconfig }} get pods -A
+
+# Show k0s status on the control plane
+status:
+    ssh -i ~/.vagrant.d/insecure_private_key -o StrictHostKeyChecking=no \
+      vagrant@{{ cp_ip }} sudo k0s status
+
+# Reset a specific node: just reset-node 192.168.56.20
+reset-node ip:
+    ssh -i ~/.vagrant.d/insecure_private_key -o StrictHostKeyChecking=no \
+      vagrant@{{ ip }} sudo k0s reset
