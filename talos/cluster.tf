@@ -39,7 +39,18 @@ locals {
   kubelet_patch = { for ip in local.all_node_ips : ip => yamlencode({
     machine = {
       kubelet = {
-        extraArgs = { "hostname-override" = local.node_hostnames[ip] }
+        extraArgs = {
+          "hostname-override" = local.node_hostnames[ip]
+          "node-ip"           = ip
+        }
+      }
+    }
+  }) }
+
+  apiserver_patch = { for ip in local.control_plane_ips : ip => yamlencode({
+    cluster = {
+      apiServer = {
+        extraArgs = { "advertise-address" = ip }
       }
     }
   }) }
@@ -56,7 +67,7 @@ data "talos_machine_configuration" "controlplane" {
   machine_secrets    = local.machine_secrets
   talos_version      = var.talos_version
   kubernetes_version = var.kubernetes_version
-  config_patches     = [local.network_patch[each.value], local.kubelet_patch[each.value]]
+  config_patches     = [local.network_patch[each.value], local.kubelet_patch[each.value], local.apiserver_patch[each.value]]
 }
 
 data "talos_machine_configuration" "worker" {
