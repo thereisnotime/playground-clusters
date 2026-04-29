@@ -13,12 +13,20 @@ locals {
     { for i, ip in local.worker_ips : ip => "worker-${i + 1}" }
   )
 
-  nodes_config = [for ip in local.all_node_ips : {
-    name   = local.node_hostnames[ip]
-    ip     = ip
-    cpus   = var.node_cpus
-    memory = var.node_memory
-  }]
+  nodes_config = concat(
+    [for ip in local.control_plane_ips : {
+      name   = local.node_hostnames[ip]
+      ip     = ip
+      cpus   = var.control_plane_cpus
+      memory = var.control_plane_memory
+    }],
+    [for ip in local.worker_ips : {
+      name   = local.node_hostnames[ip]
+      ip     = ip
+      cpus   = var.worker_cpus
+      memory = var.worker_memory
+    }]
+  )
 
   ssh = "ssh -i ${pathexpand(var.ssh_key_path)} -o StrictHostKeyChecking=no -o ConnectTimeout=10"
 }
@@ -64,6 +72,7 @@ resource "null_resource" "rke2_server_init" {
       ${local.ssh} vagrant@$IP "curl -sfL https://get.rke2.io | sudo env INSTALL_RKE2_VERSION=${var.rke2_version} sh -"
 
       echo "==> Writing config on $IP..."
+      ${local.ssh} vagrant@$IP "sudo mkdir -p /etc/rancher/rke2"
       printf '%s\n' \
         "node-name: $NAME" \
         "node-ip: $IP" \
@@ -110,6 +119,7 @@ resource "null_resource" "rke2_server_join" {
       ${local.ssh} vagrant@$IP "curl -sfL https://get.rke2.io | sudo env INSTALL_RKE2_VERSION=${var.rke2_version} sh -"
 
       echo "==> Writing config on $IP..."
+      ${local.ssh} vagrant@$IP "sudo mkdir -p /etc/rancher/rke2"
       printf '%s\n' \
         "server: https://$INIT_IP:9345" \
         "token: $TOKEN" \
@@ -153,6 +163,7 @@ resource "null_resource" "rke2_agents" {
       ${local.ssh} vagrant@$IP "curl -sfL https://get.rke2.io | sudo env INSTALL_RKE2_TYPE=agent INSTALL_RKE2_VERSION=${var.rke2_version} sh -"
 
       echo "==> Writing config on $IP..."
+      ${local.ssh} vagrant@$IP "sudo mkdir -p /etc/rancher/rke2"
       printf '%s\n' \
         "server: https://$INIT_IP:9345" \
         "token: $TOKEN" \

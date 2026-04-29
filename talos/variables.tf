@@ -16,14 +16,26 @@ variable "worker_count" {
   default     = 2
 }
 
-variable "node_cpus" {
-  description = "vCPUs per node"
+variable "control_plane_cpus" {
+  description = "vCPUs per control plane node"
   type        = number
   default     = 2
 }
 
-variable "node_memory" {
-  description = "Memory per node in MB"
+variable "control_plane_memory" {
+  description = "Memory per control plane node in MB"
+  type        = number
+  default     = 2048
+}
+
+variable "worker_cpus" {
+  description = "vCPUs per worker node"
+  type        = number
+  default     = 2
+}
+
+variable "worker_memory" {
+  description = "Memory per worker node in MB"
   type        = number
   default     = 2048
 }

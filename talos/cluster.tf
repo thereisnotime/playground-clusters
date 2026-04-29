@@ -16,13 +16,22 @@ locals {
     { for i, ip in local.worker_ips : ip => "worker-${i + 1}" }
   )
 
-  nodes_config = [for ip in local.all_node_ips : {
-    name       = local.node_hostnames[ip]
-    ip         = ip
-    talos_port = local.node_api_ports[ip]
-    cpus       = var.node_cpus
-    memory     = var.node_memory
-  }]
+  nodes_config = concat(
+    [for ip in local.control_plane_ips : {
+      name       = local.node_hostnames[ip]
+      ip         = ip
+      talos_port = local.node_api_ports[ip]
+      cpus       = var.control_plane_cpus
+      memory     = var.control_plane_memory
+    }],
+    [for ip in local.worker_ips : {
+      name       = local.node_hostnames[ip]
+      ip         = ip
+      talos_port = local.node_api_ports[ip]
+      cpus       = var.worker_cpus
+      memory     = var.worker_memory
+    }]
+  )
 
   network_patch = { for ip in local.all_node_ips : ip => yamlencode({
     machine = {
