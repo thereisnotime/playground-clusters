@@ -1,0 +1,73 @@
+kubeconfig := ".kubeadm-configs/kubeconfig"
+cp_ip      := "192.168.56.10"
+ssh_key    := "~/.vagrant.d/insecure_private_key"
+ssh_opts   := "-o StrictHostKeyChecking=no -o ConnectTimeout=10"
+
+# List available recipes
+default:
+    @just --list
+
+# Bring up the cluster (VMs + kubeadm install + bootstrap)
+up:
+    terraform apply -auto-approve
+
+# Tear down the cluster (VMs destroyed, state cleaned)
+down:
+    terraform destroy -auto-approve
+
+# Destroy and bring back up from scratch
+rebuild:
+    just down
+    just up
+
+# Initialize terraform (first time only)
+init:
+    terraform init
+
+# Preview what terraform would do
+plan:
+    terraform plan
+
+# Re-fetch kubeconfig from the control plane
+creds:
+    @mkdir -p .kubeadm-configs
+    ssh -i {{ ssh_key }} {{ ssh_opts }} vagrant@{{ cp_ip }} \
+      "sudo cat /etc/kubernetes/admin.conf" \
+      > {{ kubeconfig }}
+    @chmod 600 {{ kubeconfig }}
+    @echo "kubeconfig -> {{ kubeconfig }}"
+
+# Run any kubectl command against the cluster: just kubectl get pods -A
+kubectl *args:
+    kubectl --kubeconfig {{ kubeconfig }} {{ args }}
+
+# Show node status
+nodes:
+    kubectl --kubeconfig {{ kubeconfig }} get nodes -o wide
+
+# Show all pods across namespaces
+pods:
+    kubectl --kubeconfig {{ kubeconfig }} get pods -A
+
+# Tail logs for a pod: just logs <namespace> <pod>
+logs namespace pod:
+    kubectl --kubeconfig {{ kubeconfig }} logs -n {{ namespace }} {{ pod }} --follow
+
+# Show node and pod health
+health:
+    kubectl --kubeconfig {{ kubeconfig }} get nodes -o wide
+    kubectl --kubeconfig {{ kubeconfig }} get pods -A
+
+# Show kubelet status on the control plane
+status:
+    ssh -i {{ ssh_key }} {{ ssh_opts }} vagrant@{{ cp_ip }} \
+      "sudo systemctl status kubelet"
+
+# SSH into a node: just ssh 192.168.56.10
+ssh ip:
+    ssh -i {{ ssh_key }} {{ ssh_opts }} vagrant@{{ ip }}
+
+# Reset kubeadm on a node: just reset-node 192.168.56.20
+reset-node ip:
+    ssh -i {{ ssh_key }} {{ ssh_opts }} vagrant@{{ ip }} \
+      "sudo kubeadm reset -f && sudo iptables -F && sudo iptables -t nat -F"

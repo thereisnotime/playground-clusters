@@ -38,6 +38,14 @@ k0s/k0sctl.yaml
 rke2/.vagrant-nodes/
 rke2/.rke2-configs/
 
+# k3s
+k3s/.vagrant-nodes/
+k3s/.k3s-configs/
+
+# kubeadm
+kubeadm/.vagrant-nodes/
+kubeadm/.kubeadm-configs/
+
 # Packer
 packer_cache/
 *.box

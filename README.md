@@ -19,6 +19,8 @@ Local Kubernetes playground for spinning up and tearing down clusters of differe
 | [`talos/`](talos/) | [Talos Linux](https://www.talos.dev) | `theorigamicorporation/talos-virtualbox` | Talos Terraform provider |
 | [`k0s/`](k0s/) | [k0s](https://k0sproject.io) | `bento/debian-12` | k0sctl |
 | [`rke2/`](rke2/) | [RKE2](https://docs.rke2.io) | `bento/debian-12` | SSH shell scripts |
+| [`k3s/`](k3s/) | [k3s](https://k3s.io) | `bento/debian-12` | SSH shell scripts |
+| [`kubeadm/`](kubeadm/) | [kubeadm](https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/) | `bento/debian-12` | SSH shell scripts |
 
 All clusters follow the same layout and expose the same `just` commands.
 
