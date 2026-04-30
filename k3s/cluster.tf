@@ -159,15 +159,13 @@ resource "null_resource" "k3s_agents" {
       echo "==> Writing k3s config on $IP..."
       ${local.ssh} vagrant@$IP "sudo mkdir -p /etc/rancher/k3s"
       printf '%s\n' \
-        "server: https://$INIT_IP:6443" \
-        "token: $TOKEN" \
         "node-name: $NAME" \
         "node-ip: $IP" \
         | ${local.ssh} vagrant@$IP "sudo tee /etc/rancher/k3s/config.yaml > /dev/null"
 
       echo "==> Installing k3s agent on $IP..."
       ${local.ssh} vagrant@$IP \
-        "curl -sfL https://get.k3s.io | sudo INSTALL_K3S_TYPE=agent INSTALL_K3S_VERSION=${var.k3s_version} sh -"
+        "curl -sfL https://get.k3s.io | sudo env K3S_URL=https://$INIT_IP:6443 K3S_TOKEN=$TOKEN INSTALL_K3S_VERSION=${var.k3s_version} sh -"
       echo "==> k3s agent started on $IP"
     EOT
   }
